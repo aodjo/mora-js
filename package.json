@@ -1,0 +1,51 @@
+{
+  "name": "mora-lyrics",
+  "version": "0.2.0",
+  "description": "Mora 가사 타이밍 API 클라이언트 — 노래의 어느 순간에 어느 낱말이 불리는지",
+  "license": "MIT",
+  "author": "aodjo",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "homepage": "https://github.com/aodjo/mora-js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aodjo/mora-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aodjo/mora-js/issues"
+  },
+  "keywords": [
+    "lyrics",
+    "karaoke",
+    "alignment",
+    "timing",
+    "lrc",
+    "subtitle",
+    "webvtt",
+    "ttml"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "typescript": "^5.8.3"
+  }
+}

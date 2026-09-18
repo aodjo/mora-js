@@ -352,6 +352,62 @@ test("suggest 는 제목에 오타가 있으면 가수로 다시 묻는다", asy
   assert.equal(fake.asked.length, 2, "제목으로 먼저 묻고, 없으면 가수로 다시 묻는다");
 });
 
+test("suggest 는 이미 받아 온 앨범·길이·곡번호를 버리지 않는다", async () => {
+  // 검색 응답에 이미 들어 있는 값이다. 길이가 있어야 이 목록으로 고른 곡의 음원을 길이로 확인할
+  // 수 있다 — 산토리 자리에 아크라포빅 영상이 붙었던 일이 그 검사가 없어서였다.
+  const fake = serve(() =>
+    JSON.stringify({
+      response: {
+        result: {
+          tracks: [
+            {
+              trackId: 55,
+              trackTitle: "영원은 그렇듯",
+              playTime: "03:57",
+              artists: [{ artistName: "리도어(Redoor)" }],
+              album: { albumTitle: "어떤 앨범" },
+            },
+          ],
+        },
+      },
+    }),
+  );
+  const got = await withServer(fake, () => suggest("영원은 그렇듯", "리도어"));
+  assert.deepEqual(got, [
+    {
+      title: "영원은 그렇듯",
+      artist: "리도어(Redoor)",
+      album: "어떤 앨범",
+      durationMs: 237000,
+      trackId: "55",
+    },
+  ]);
+});
+
+test("suggest 는 길이를 모르면 그 칸을 아예 안 넣는다", async () => {
+  // 길이를 지어내면 엉뚱한 음원을 「맞다」고 집는다. 모르면 키가 없어야 한다 — undefined 를
+  // 넣어 두면 「받았는데 비었다」와 「안 받았다」를 못 가른다.
+  const fake = serve(() =>
+    JSON.stringify({
+      response: {
+        result: {
+          tracks: [
+            { trackTitle: "길이 없는 곡", artists: [{ artistName: "아무개" }] },
+            { trackTitle: "이상한 길이", playTime: "모름", artists: [{ artistName: "아무개" }] },
+          ],
+        },
+      },
+    }),
+  );
+  const got = await withServer(fake, () => suggest("길이 없는 곡"));
+  for (const one of got) {
+    assert.equal("durationMs" in one, false);
+    assert.equal("album" in one, false);
+    assert.equal("trackId" in one, false);
+  }
+  assert.deepEqual(got[0], { title: "길이 없는 곡", artist: "아무개" });
+});
+
 test("suggest 는 검색이 죽으면 지어내지 않는다", async () => {
   const fake = serve(() => {
     throw new Error("망이 안 된다");

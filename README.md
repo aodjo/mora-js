@@ -77,8 +77,12 @@ bugs   28줄 → word        1.000
 제목을 틀리게 적었을 때는 `suggest()` 가 **거르지 않은** 검색 결과를 보여 줍니다 — 오타 때는 가수 이름만으로 다시 묻습니다.
 
 ```ts
-await suggest("offically missing you", "긱스");   // [{ title: "Officially Missing You", artist: "긱스(Geeks)" }]
+await suggest("offically missing you", "긱스");
+// [{ title: "Officially Missing You", artist: "긱스(Geeks)",
+//    album: "Officially Missing You (EP)", durationMs: 211000, trackId: "2425458" }, …]
 ```
+
+앨범·길이·곡 번호는 검색 응답에 이미 들어 있던 값이라 요청이 늘지 않습니다. **길이가 중요합니다** — 이 목록으로 고른 곡의 음원을 받을 때 제목으로 먼저 거르고 길이로 확인해야 엉뚱한 영상을 안 집습니다. 저쪽이 안 주면 그 칸은 아예 없습니다(`undefined` 가 아니라 키가 없습니다).
 
 > 이 부분만 **Node 전용**입니다. 제공처들이 CORS 를 열어 두지 않았고, 브라우저에서는 `User-Agent` 도 못 세웁니다 — genie 의 19금 가사는 그 헤더로 갈립니다. 정렬 쪽은 브라우저에서도 그대로 돕니다.
 

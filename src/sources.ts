@@ -60,10 +60,22 @@ export interface Lyrics {
   synced: LyricLine[];
 }
 
-/** 검색만 해 본 결과 한 줄 — 가사는 안 딸려 온다. */
+/**
+ * 검색만 해 본 결과 한 줄 — 가사는 안 딸려 온다.
+ *
+ * 뒤의 세 칸은 검색 응답에 이미 들어 있던 값이라 더 물을 것이 없다. 저쪽이 안 주면 **키를 아예
+ * 안 넣는다** — `undefined` 를 넣어 두면 「받았는데 비었다」와 「안 받았다」를 못 가른다.
+ */
 export interface Suggestion {
   title: string;
   artist: string;
+  album?: string;
+  /**
+   * 제공처가 말하는 곡 길이(ms). 음원을 고를 때 제목으로 먼저 거르고 **이것으로 확인**한다 —
+   * 산토리 자리에 아크라포빅 영상이 붙었던 일이 그 검사가 없어서였다.
+   */
+  durationMs?: number;
+  trackId?: string;
 }
 
 export interface FetchOptions {
@@ -909,14 +921,18 @@ export async function vibe(
  * 그런데 사람이 철자를 하나 틀린 것뿐일 때 「없다」고만 하면 무엇을 고쳐야 할지 알 수 없다.
  * 이것은 **거르지 않은** 검색 결과다.
  *
+ * 앨범·길이·곡 번호도 함께 싣는다. 검색 응답에 이미 들어 있는 값이라 더 물을 것이 없고, 길이가
+ * 있어야 이 목록으로 고른 곡의 음원을 길이로 확인할 수 있다.
+ *
  * @async
  * @param {string} title - 찾던 곡 이름.
  * @param {string} [artist] - 가수 이름.
  * @param {object} [options={}] - `most` 몇 개까지 볼지, `timeoutMs` 기다릴 밀리초.
- * @returns {Promise<Suggestion[]>} (제목, 가수) 짝. 검색이 안 되면 빈 목록.
+ * @returns {Promise<Suggestion[]>} 제목·가수·앨범·길이·곡 번호. 검색이 안 되면 빈 목록.
  *
  * @example
- * await suggest("offically missing you", "긱스"); // [{ title: "Officially Missing You", … }]
+ * await suggest("offically missing you", "긱스");
+ * // [{ title: "Officially Missing You", artist: "긱스(Geeks)", durationMs: 253000, … }]
  */
 export async function suggest(
   title: string,
@@ -941,10 +957,18 @@ export async function suggest(
     }
     const tracks = found?.response?.result?.tracks ?? [];
     if (tracks.length > 0) {
-      return tracks.slice(0, most).map((one) => ({
-        title: one.trackTitle ?? "",
-        artist: (one.artists ?? []).map((a) => a.artistName ?? "").join(", "),
-      }));
+      return tracks.slice(0, most).map((one) => {
+        const row: Suggestion = {
+          title: one.trackTitle ?? "",
+          artist: (one.artists ?? []).map((a) => a.artistName ?? "").join(", "),
+        };
+        const album = one.album?.albumTitle;
+        if (album) row.album = album;
+        const durationMs = playTime(one.playTime);
+        if (durationMs !== null) row.durationMs = durationMs;
+        if (one.trackId !== undefined && one.trackId !== null) row.trackId = String(one.trackId);
+        return row;
+      });
     }
   }
   return [];

@@ -56,6 +56,11 @@ export interface Lyrics {
    * 자리에 아크라포빅 영상이 붙었던 일이 바로 그 검사가 없어서였다. JSON 제공처(vibe·flo)만 준다.
    */
   durationMs?: number | undefined;
+  /**
+   * 앨범 자켓 주소. 네 곳 모두 **이미 받아 오는 응답 안에** 들어 있어 요청이 늘지 않는다.
+   * 크기는 제공처마다 다르다 — vibe 480 · genie 600 · bugs 200 · flo 는 가장 큰 것.
+   */
+  imageUrl?: string | undefined;
   /** 제공처가 시각까지 주면 채워진다. Mora 에 보낼 때는 안 쓰지만, 견주어 볼 수는 있다. */
   synced: LyricLine[];
 }
@@ -76,6 +81,8 @@ export interface Suggestion {
    */
   durationMs?: number;
   trackId?: string;
+  /** 앨범 자켓 주소. 검색 응답에 온 그대로다 — 크기 지정(`type=r480Fll`)도 손대지 않는다. */
+  imageUrl?: string;
 }
 
 export interface FetchOptions {
@@ -642,6 +649,8 @@ interface FloTrack {
   artistList?: FloArtist[];
   lyrics?: string;
   lyricsList?: Array<{ timeMillis?: number; time?: number; text?: string }>;
+  /** `imgList` 는 같은 그림의 크기별 주소다 — 75px 부터 1000px 까지 작은 것부터 온다. */
+  album?: { title?: string; imgList?: Array<{ url?: string }> };
 }
 
 interface VibeArtist {
@@ -653,7 +662,25 @@ interface VibeTrack {
   trackTitle?: string;
   playTime?: string;
   artists?: VibeArtist[];
-  album?: { albumTitle?: string };
+  album?: { albumTitle?: string; imageUrl?: string };
+}
+
+/**
+ * Make an address written in a page usable on its own.
+ *
+ * genie 는 자켓 주소를 `//image.genie.co.kr/…` 꼴로 준다 — 그대로는 못 받으므로 빠진 스킴만
+ * 채운다. 크기나 경로는 **건드리지 않는다**: 저쪽이 규칙을 바꾸면 우리가 지어낸 주소만 깨진다.
+ *
+ * @param {string | undefined} src - The address as the page wrote it.
+ * @returns {string | undefined} An address that can be fetched, or undefined when there was none.
+ *
+ * @example
+ * imageAt("//image.genie.co.kr/a.jpg"); // "https://image.genie.co.kr/a.jpg"
+ */
+function imageAt(src: string | undefined): string | undefined {
+  if (!src) return undefined;
+  if (src.startsWith("//")) return `https:${src}`;
+  return src.startsWith("http") ? src : undefined;
 }
 
 /**
@@ -673,7 +700,7 @@ export async function bugs(
   const base = "https://music.bugs.co.kr";
   const head = { Referer: `${base}/` };
   const found = parseHtml(await get(`${base}/search/track?q=${query(title, artist)}`, timeoutMs, head));
-  const rows: Array<[string, string, string]> = [];
+  const rows: Array<[string, string, string, string | undefined]> = [];
   for (const row of found.find("tr", { attr: "trackid" })) {
     // 제목은 `p.title` **안의** a 다. 행의 첫 a 를 집으면 앨범 표지 링크가 걸린다.
     const holder = row.first("p", { cls: "title" });
@@ -681,7 +708,13 @@ export async function bugs(
     const name = (link === null ? "" : link.attrs["title"] ?? "") || textOf(link);
     if (!name.trim()) continue;
     const singer = row.first("p", { cls: "artist" });
-    rows.push([row.attrs["trackid"] ?? "", name.trim(), textOf(singer === null ? null : singer.first("a"))]);
+    const cover = row.first("img");
+    rows.push([
+      row.attrs["trackid"] ?? "",
+      name.trim(),
+      textOf(singer === null ? null : singer.first("a")),
+      imageAt(cover === null ? undefined : cover.attrs["src"]),
+    ]);
   }
   const best = pickTrack(rows, title, artist, (one) => [one[1], one[2]]);
   if (best === null) return null;
@@ -694,11 +727,15 @@ export async function bugs(
   const plain = holder === null ? null : holder.first("xmp");
   const lyrics = plain === null ? htmlToText(innerHtml(holder)) : plain.rawText().trim();
   if (!lyrics.trim()) return null;
+  // 트랙 페이지의 `li.big` 이 200px 자켓이다. 검색 행의 것은 50px 이라 그 다음으로 친다.
+  const big = page.first("li", { cls: "big" });
+  const cover = big === null ? null : big.first("img");
   return {
     provider: "bugs",
     lyrics: lyrics.trim(),
     title: best[1] || title,
     artist: best[2] || artist,
+    imageUrl: imageAt(cover === null ? undefined : cover.attrs["src"]) ?? best[3],
     url: where,
     trackId,
     synced: [],
@@ -725,16 +762,19 @@ export async function genie(
   const base = "https://www.genie.co.kr";
   const head = { Referer: `${base}/` };
   const found = parseHtml(await get(`${base}/search/searchMain?query=${query(title, artist)}`, timeoutMs, head));
-  const rows: Array<[string, string, string, string | undefined]> = [];
+  const rows: Array<[string, string, string, string | undefined, string | undefined]> = [];
   for (const row of found.find("tr", { attr: "songid" })) {
     const link = row.first("a", { cls: "title" });
     const name = link === null ? "" : link.ownText() || (link.attrs["title"] ?? "").trim();
     if (!name) continue;
+    // 시각 가사가 있으면 상세 페이지를 안 열므로, 자켓은 **검색 행에서** 챙겨 두어야 한다.
+    const cover = row.first("img");
     rows.push([
       row.attrs["songid"] ?? "",
       name,
       textOf(row.first("a", { cls: "artist" })),
       textOf(row.first("a", { cls: "albumtitle" })) || undefined,
+      imageAt(cover === null ? undefined : cover.attrs["src"]),
     ]);
   }
   const best = pickTrack(rows, title, artist, (one) => [one[1], one[2]]);
@@ -772,6 +812,7 @@ export async function genie(
     title: best[1] || title,
     artist: best[2] || artist,
     album: best[3],
+    imageUrl: best[4],
     url: detail,
     trackId: songId,
     synced,
@@ -825,11 +866,16 @@ export async function flo(
   const lyrics = plainFrom(plain, synced);
   if (!lyrics) return null;
   const credited = (best.artistList ?? []).map((one) => one.name ?? "").filter(Boolean);
+  // flo 만 크기별 주소를 목록으로 준다. 줄이는 것은 부르는 쪽이 할 수 있고 늘리는 것은 못 하므로
+  // 가장 큰 것을 싣는다. 자리로 고르지 않고 **마지막**을 집어 목록이 길어져도 따라간다.
+  const art = meta.album?.imgList ?? best.album?.imgList ?? [];
   return {
     provider: "flo",
     lyrics,
     title: meta.name || best.name || title,
     artist: credited.length > 0 ? credited.join(", ") : artist,
+    album: meta.album?.title ?? best.album?.title,
+    imageUrl: imageAt(art[art.length - 1]?.url),
     durationMs: playTime(best.playTime ?? meta.playTime) ?? undefined,
     url: `${base}/detail/track/${trackId}/detailinfo`,
     trackId,
@@ -907,6 +953,7 @@ export async function vibe(
     title: best.trackTitle || title,
     artist: credited.length > 0 ? credited.join(", ") : artist,
     album: best.album?.albumTitle,
+    imageUrl: imageAt(best.album?.imageUrl),
     durationMs: playTime(best.playTime) ?? undefined,
     url: `https://vibe.naver.com/track/${trackId}`,
     trackId,
@@ -964,6 +1011,9 @@ export async function suggest(
         };
         const album = one.album?.albumTitle;
         if (album) row.album = album;
+        // 주소는 온 그대로 싣는다 — `type=r480Fll` 같은 크기 지정도 손대지 않는다.
+        const imageUrl = imageAt(one.album?.imageUrl);
+        if (imageUrl !== undefined) row.imageUrl = imageUrl;
         const durationMs = playTime(one.playTime);
         if (durationMs !== null) row.durationMs = durationMs;
         if (one.trackId !== undefined && one.trackId !== null) row.trackId = String(one.trackId);

@@ -65,10 +65,12 @@ bugs   28줄 → word        1.000
 
 제공처마다 줄 나눔이 다릅니다. **그대로 보내도 붙고**, 얼마나 맞았는지가 `confidence` 로 드러납니다.
 
-| | 어떻게 | 시각 가사 | 곡 길이 |
-|---|---|---|---|
-| `vibe` · `flo` | JSON API | vibe 만 | 둘 다 (`durationMs`) |
-| `bugs` · `genie` | 페이지 읽기 | genie 만 | 없음 |
+| | 어떻게 | 시각 가사 | 곡 길이 | 앨범 자켓 |
+|---|---|---|---|---|
+| `vibe` · `flo` | JSON API | vibe 만 | 둘 다 (`durationMs`) | 둘 다 |
+| `bugs` · `genie` | 페이지 읽기 | genie 만 | 없음 | 둘 다 |
+
+`imageUrl` 은 네 곳 모두 줍니다 — **이미 받아 오는 응답 안에** 들어 있어 요청이 늘지 않습니다. 크기는 제공처가 정합니다(vibe 480 · genie 600 · bugs 200 · flo 는 주는 것 중 가장 큰 것). 주소는 온 그대로 싣고, genie 가 `//` 로 시작하는 주소를 줄 때만 빠진 스킴을 채웁니다.
 
 열쇠는 필요 없습니다. 페이지를 읽는 쪽은 저쪽이 화면을 바꾸면 깨지는데, 그때는 **다른 곳이 받아 줍니다** — `fetchLyrics` 는 한 곳이 막혀도 나머지로 갑니다.
 
@@ -78,11 +80,12 @@ bugs   28줄 → word        1.000
 
 ```ts
 await suggest("offically missing you", "긱스");
-// [{ title: "Officially Missing You", artist: "긱스(Geeks)",
-//    album: "Officially Missing You (EP)", durationMs: 211000, trackId: "2425458" }, …]
+// [{ title: "Officially Missing You", artist: "긱스(Geeks)", album: "Officially Missing You (EP)",
+//    imageUrl: "https://musicmeta-phinf.pstatic.net/album/…jpg?type=r480Fll&v=…",
+//    durationMs: 211000, trackId: "2425458" }, …]
 ```
 
-앨범·길이·곡 번호는 검색 응답에 이미 들어 있던 값이라 요청이 늘지 않습니다. **길이가 중요합니다** — 이 목록으로 고른 곡의 음원을 받을 때 제목으로 먼저 거르고 길이로 확인해야 엉뚱한 영상을 안 집습니다. 저쪽이 안 주면 그 칸은 아예 없습니다(`undefined` 가 아니라 키가 없습니다).
+앨범·자켓·길이·곡 번호는 검색 응답에 이미 들어 있던 값이라 요청이 늘지 않습니다. **길이가 중요합니다** — 이 목록으로 고른 곡의 음원을 받을 때 제목으로 먼저 거르고 길이로 확인해야 엉뚱한 영상을 안 집습니다. 저쪽이 안 주면 그 칸은 아예 없습니다(`undefined` 가 아니라 키가 없습니다).
 
 > 이 부분만 **Node 전용**입니다. 제공처들이 CORS 를 열어 두지 않았고, 브라우저에서는 `User-Agent` 도 못 세웁니다 — genie 의 19금 가사는 그 헤더로 갈립니다. 정렬 쪽은 브라우저에서도 그대로 돕니다.
 

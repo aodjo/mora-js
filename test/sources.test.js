@@ -221,7 +221,7 @@ test("vibe 의 시각 가사는 나란한 두 배열에서 온다", async () => 
                     trackTitle: "영원은 그렇듯",
                     playTime: "03:57",
                     artists: [{ artistName: "리도어(Redoor)" }],
-                    album: { albumTitle: "어떤 앨범" },
+                    album: { albumTitle: "어떤 앨범", imageUrl: "https://그림/a.jpg?type=r480Fll" },
                   },
                 ],
               },
@@ -254,26 +254,43 @@ test("vibe 의 시각 가사는 나란한 두 배열에서 온다", async () => 
   );
   assert.equal(got.durationMs, 237000);
   assert.equal(got.album, "어떤 앨범");
+  // 크기 지정까지 온 그대로. 우리가 고쳐 쓰면 저쪽이 규칙을 바꿀 때 우리 주소만 깨진다.
+  assert.equal(got.imageUrl, "https://그림/a.jpg?type=r480Fll");
 });
 
 test("bugs 의 제목은 앨범 표지 링크가 아니라 p.title 안의 a 다", async () => {
   // 행의 첫 a 를 집으면 표지 링크가 걸려 제목이 비고 곡을 못 고른다.
   const search =
-    '<table><tr trackid="111"><td><a href="/album/1"><img alt="표지"></a>' +
+    '<table><tr trackid="111"><td><a href="/album/1"><img src="https://그림/50/a.jpg" alt="표지"></a>' +
     '<p class="title"><a href="/track/111" title="영원은 그렇듯">영원은 그렇듯</a></p>' +
     '<p class="artist"><a href="/artist/9">리도어</a></p></td></tr></table>';
-  const track = '<div class="lyricsContainer"><xmp>첫째 줄\n둘째 줄\n셋째 줄</xmp></div>';
+  const track =
+    '<div class="photos"><ul><li class="big"><a><img src="https://그림/200/a.jpg"></a></li></ul></div>' +
+    '<div class="lyricsContainer"><xmp>첫째 줄\n둘째 줄\n셋째 줄</xmp></div>';
   const fake = serve((url) => (url.includes("/search/track") ? search : track));
   const got = await withServer(fake, () => bugs("영원은 그렇듯", "리도어"));
   assert.equal(got.title, "영원은 그렇듯");
   assert.equal(got.trackId, "111");
   // `<xmp>` 의 줄바꿈이 그대로 살아야 한다.
   assert.deepEqual(got.lyrics.split("\n"), ["첫째 줄", "둘째 줄", "셋째 줄"]);
+  // 트랙 페이지의 200px 자켓이 검색 행의 50px 짜리를 이긴다.
+  assert.equal(got.imageUrl, "https://그림/200/a.jpg");
+});
+
+test("bugs 는 트랙 페이지에 자켓이 없으면 검색 행의 것으로 간다", async () => {
+  const search =
+    '<table><tr trackid="111"><td><a href="/album/1"><img src="https://그림/50/a.jpg"></a>' +
+    '<p class="title"><a title="영원은 그렇듯">영원은 그렇듯</a></p></td></tr></table>';
+  const track = '<div class="lyricsContainer"><xmp>첫째 줄</xmp></div>';
+  const fake = serve((url) => (url.includes("/search/track") ? search : track));
+  const got = await withServer(fake, () => bugs("영원은 그렇듯", "리도어"));
+  assert.equal(got.imageUrl, "https://그림/50/a.jpg");
 });
 
 test("genie 는 0ms 에 붙은 제목 머리줄을 떼고 준다", async () => {
   const search =
-    '<table><tr songid="22"><a class="title" href="#"><span class="ico">곡명</span>영원은 그렇듯</a>' +
+    '<table><tr songid="22"><img src="//image.genie.co.kr/a_600x600.JPG" alt="영원은 그렇듯">' +
+    '<a class="title" href="#"><span class="ico">곡명</span>영원은 그렇듯</a>' +
     '<a class="artist" href="#">리도어</a><a class="albumtitle" href="#">어떤 앨범</a></tr></table>';
   const msl = 'lyrics({"0":"영원은 그렇듯 - 리도어","400":"첫째","12040":"둘째"});';
   const fake = serve((url) => (url.includes("get_msl.asp") ? msl : search));
@@ -284,6 +301,8 @@ test("genie 는 0ms 에 붙은 제목 머리줄을 떼고 준다", async () => {
     [400, 12040],
   );
   assert.equal(got.album, "어떤 앨범");
+  // genie 는 `//` 로 시작하는 주소를 준다. 그대로는 못 받으므로 빠진 스킴만 채운다.
+  assert.equal(got.imageUrl, "https://image.genie.co.kr/a_600x600.JPG");
   assert.equal(fake.asked.length, 2, "시각 가사를 받았으면 상세 페이지는 안 연다");
 });
 
@@ -303,7 +322,17 @@ test("flo 는 검색과 상세를 따로 묻고 길이를 함께 준다", async 
               ],
             },
           }
-        : { data: { name: "영원은 그렇듯", lyrics: "첫째\n둘째" } },
+        : {
+            data: {
+              name: "영원은 그렇듯",
+              lyrics: "첫째\n둘째",
+              album: {
+                title: "어떤 앨범",
+                // 같은 그림의 크기별 주소가 작은 것부터 온다.
+                imgList: [{ url: "https://그림/75.jpg" }, { url: "https://그림/500.jpg" }, { url: "https://그림/1000.jpg" }],
+              },
+            },
+          },
     ),
   );
   const got = await withServer(fake, () => flo("영원은 그렇듯", "리도어"));
@@ -311,6 +340,9 @@ test("flo 는 검색과 상세를 따로 묻고 길이를 함께 준다", async 
   assert.equal(got.lyrics, "첫째\n둘째");
   assert.equal(got.durationMs, 237000);
   assert.equal(got.trackId, "7");
+  assert.equal(got.album, "어떤 앨범");
+  // 줄이는 것은 부르는 쪽이 할 수 있고 늘리는 것은 못 한다 — 가장 큰 것을 싣는다.
+  assert.equal(got.imageUrl, "https://그림/1000.jpg");
 });
 
 test("한 곳이 막혀도 나머지로 간다", async () => {
@@ -365,7 +397,10 @@ test("suggest 는 이미 받아 온 앨범·길이·곡번호를 버리지 않�
               trackTitle: "영원은 그렇듯",
               playTime: "03:57",
               artists: [{ artistName: "리도어(Redoor)" }],
-              album: { albumTitle: "어떤 앨범" },
+              album: {
+                albumTitle: "어떤 앨범",
+                imageUrl: "https://musicmeta-phinf.pstatic.net/album/005/187/5187500.jpg?type=r480Fll&v=2026",
+              },
             },
           ],
         },
@@ -378,10 +413,32 @@ test("suggest 는 이미 받아 온 앨범·길이·곡번호를 버리지 않�
       title: "영원은 그렇듯",
       artist: "리도어(Redoor)",
       album: "어떤 앨범",
+      // 크기 지정(`type=r480Fll`)까지 온 그대로여야 한다.
+      imageUrl: "https://musicmeta-phinf.pstatic.net/album/005/187/5187500.jpg?type=r480Fll&v=2026",
       durationMs: 237000,
       trackId: "55",
     },
   ]);
+});
+
+test("suggest 는 자켓 주소가 없으면 그 칸을 아예 안 넣는다", async () => {
+  // 앨범은 왔는데 그림이 없는 경우가 있다. 없는 것을 지어내지 않는다.
+  const fake = serve(() =>
+    JSON.stringify({
+      response: {
+        result: {
+          tracks: [
+            { trackTitle: "그림 없는 곡", artists: [{ artistName: "아무개" }], album: { albumTitle: "어떤 앨범" } },
+            { trackTitle: "앨범 없는 곡", artists: [{ artistName: "아무개" }] },
+          ],
+        },
+      },
+    }),
+  );
+  const got = await withServer(fake, () => suggest("그림 없는 곡"));
+  assert.equal("imageUrl" in got[0], false);
+  assert.equal(got[0].album, "어떤 앨범");
+  assert.deepEqual(got[1], { title: "앨범 없는 곡", artist: "아무개" });
 });
 
 test("suggest 는 길이를 모르면 그 칸을 아예 안 넣는다", async () => {

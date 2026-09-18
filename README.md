@@ -34,6 +34,54 @@ for (const line of got.lines) {
 
 셋 다 없으면 네트워크를 타기 전에 `TypeError` 로 막습니다.
 
+## 가사는 어디서
+
+Mora 는 **타이밍만** 줍니다. 가사 글은 부르는 쪽이 들고 있어야 하는데, 그것을 어디서 구하느냐가 매번 막히는 자리였습니다. 그래서 수집기가 쓰는 길을 그대로 넣었습니다.
+
+```ts
+const got = await mora.lyrics("영원은 그렇듯", "리도어");   // 받은 첫 곳
+console.log(got.provider, got.lyrics);
+
+const timed = await mora.align(got.lyrics, { artist: got.artist, title: got.title, durationMs: 237000 });
+```
+
+여럿을 견주려면:
+
+```ts
+import { fetchLyrics, suggest } from "mora-lyrics";
+
+for (const one of await fetchLyrics("영원은 그렇듯", "리도어")) {
+  const timed = await mora.align(one.lyrics, { artist: "리도어(Redoor)", title: "영원은 그렇듯", durationMs: 237000 });
+  console.log(one.provider, one.lyrics.split("\n").length, "줄 →", timed.tier, timed.confidence.toFixed(3));
+}
+```
+
+```
+vibe   33줄 → word        1.000
+flo    37줄 → word-approx 0.820
+genie  28줄 → word        1.000
+bugs   28줄 → word        1.000
+```
+
+제공처마다 줄 나눔이 다릅니다. **그대로 보내도 붙고**, 얼마나 맞았는지가 `confidence` 로 드러납니다.
+
+| | 어떻게 | 시각 가사 | 곡 길이 |
+|---|---|---|---|
+| `vibe` · `flo` | JSON API | vibe 만 | 둘 다 (`durationMs`) |
+| `bugs` · `genie` | 페이지 읽기 | genie 만 | 없음 |
+
+열쇠는 필요 없습니다. 페이지를 읽는 쪽은 저쪽이 화면을 바꾸면 깨지는데, 그때는 **다른 곳이 받아 줍니다** — `fetchLyrics` 는 한 곳이 막혀도 나머지로 갑니다.
+
+곡을 고르는 규칙은 수집기 것을 그대로 옮겼습니다: **제목 일치는 필수**, 가수는 같은 제목이 여럿일 때 **우선 신호로만**. 가수 불일치로 버리면 「IU」와 「아이유」처럼 표기가 다른 정상 곡을 전부 잃기 때문입니다.
+
+제목을 틀리게 적었을 때는 `suggest()` 가 **거르지 않은** 검색 결과를 보여 줍니다 — 오타 때는 가수 이름만으로 다시 묻습니다.
+
+```ts
+await suggest("offically missing you", "긱스");   // [{ title: "Officially Missing You", artist: "긱스(Geeks)" }]
+```
+
+> 이 부분만 **Node 전용**입니다. 제공처들이 CORS 를 열어 두지 않았고, 브라우저에서는 `User-Agent` 도 못 세웁니다 — genie 의 19금 가사는 그 헤더로 갈립니다. 정렬 쪽은 브라우저에서도 그대로 돕니다.
+
 ## 지금 부르는 줄
 
 ```ts

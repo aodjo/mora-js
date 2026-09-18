@@ -4,6 +4,8 @@
  * 가진 가사를 그대로 보내면 시각이 붙어 돌아온다. 가사 표기를 서버에 맞출 필요는 없다 — 서버가
  * 지문으로 견주어 제 자리에 얹는다.
  *
+ * 가사 글이 없으면 `mora.lyrics()` 나 `fetchLyrics()` 가 제공처에서 가져온다 — 그쪽은 Node 전용이다.
+ *
  * @example
  *   import { Mora } from "mora-lyrics";
  *
@@ -26,5 +28,22 @@ export {
   type Recording,
 } from "./client.js";
 export { toLrc, toSrt, toVtt } from "./export.js";
+export {
+  LYRIC_TIMEOUT_MS,
+  PROVIDERS,
+  bugs,
+  comparable,
+  fetchLyrics,
+  flo,
+  genie,
+  playTime,
+  sameArtist,
+  suggest,
+  vibe,
+  type FetchOptions,
+  type LyricLine,
+  type Lyrics,
+  type Suggestion,
+} from "./sources.js";
 export { Alignment, type Format, type Line, type Speaker, type Tier, type Token, type Word } from "./models.js";
 export { Playhead, type Moment } from "./playback.js";

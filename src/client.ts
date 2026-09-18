@@ -6,6 +6,7 @@
  */
 
 import { Alignment, type Format, type Line, type Speaker, type Token, type Word } from "./models.js";
+import { fetchLyrics, type Lyrics } from "./sources.js";
 
 export const DEFAULT_BASE_URL = "https://mora.junx.dev";
 export const DEFAULT_TIMEOUT_MS = 15_000;
@@ -310,6 +311,37 @@ export class Mora {
     recording: Recording,
   ): Promise<unknown> {
     return this.#post("/v1/align/fingerprint", { ...identify(recording), fingerprint });
+  }
+
+  /**
+   * 가사 글을 제공처에서 가져온다 — Mora 는 타이밍만 주기 때문이다.
+   *
+   * vibe · flo · genie · bugs 에 차례로 물어 **처음 받은 것**을 돌려준다. 여럿을 견주고 싶으면
+   * `fetchLyrics()` 를 직접 쓴다.
+   *
+   * 제공처들은 CORS 를 열어 두지 않았으므로 이것은 **Node 에서만** 된다. 나머지 메서드는 브라우저에서도
+   * 그대로 돈다.
+   *
+   * @param {string} title - 곡 이름.
+   * @param {string} [artist] - 가수 이름. 같은 제목의 다른 곡을 가려낸다.
+   * @param {object} [options={}] - `providers` 물어볼 곳, `timeoutMs` 기다릴 밀리초(비우면 이 클라이언트의 값).
+   * @returns {Promise<Lyrics | null>} 받은 가사. 아무 곳도 못 주면 null.
+   *
+   * @example
+   * const got = await mora.lyrics("영원은 그렇듯", "리도어");
+   * const timed = await mora.align(got.lyrics, { artist: got.artist, title: got.title, durationMs: 237000 });
+   */
+  async lyrics(
+    title: string,
+    artist?: string,
+    options: { providers?: string[]; timeoutMs?: number } = {},
+  ): Promise<Lyrics | null> {
+    const got = await fetchLyrics(title, artist, {
+      providers: options.providers,
+      timeoutMs: options.timeoutMs ?? this.timeoutMs,
+      first: true,
+    });
+    return got[0] ?? null;
   }
 
   /** @returns {Promise<boolean>} 서버가 살아 있는가. */
